@@ -1,13 +1,37 @@
 
 import {setGlobalOptions} from "firebase-functions/v2";
-import {onCall, HttpsError} from "firebase-functions/v2/https";
+import {onCall, HttpsError, onRequest} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
+import axios from "axios";
 
 admin.initializeApp();
 
 // Definindo a região globalmente
 setGlobalOptions({ region: "us-central1" });
+
+// Função de Proxy para o Redash
+export const redashProxy = onRequest({ cors: true }, async (req, res) => {
+    logger.info("Redash proxy request received");
+    
+    // A URL da API do Redash com a sua chave.
+    const REDASH_API_URL = "https://redash.flash-services.com/api/queries/130603/results.json?api_key=VqwlaUY9wOLjhUJTvrfuKdFExSsJG8ktuzUXy4fR";
+
+    try {
+        const response = await axios.get(REDASH_API_URL);
+        
+        // Repassa os dados do Redash como resposta.
+        res.status(200).send(response.data);
+
+    } catch (error) {
+        logger.error("Error fetching data from Redash:", error);
+        if (axios.isAxiosError(error) && error.response) {
+            res.status(error.response.status).send(error.response.data);
+        } else {
+            res.status(500).send("Internal Server Error");
+        }
+    }
+});
 
 // Função para solicitar atendimento, agora com CORS definido corretamente
 export const solicitarAtendimento = onCall({ cors: true }, async (request) => {
