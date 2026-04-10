@@ -1,11 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 
+// A URL da função de proxy do Firebase agora está gravada diretamente no código.
+// Isso garante que a consulta funcione de forma consistente em todos os ambientes.
 const getRedashUrl = () => {
-  if (import.meta.env.DEV) {
-    return "/api/redash/api/queries/130603/results.json?api_key=VqwlaUY9wOLjhUJTvrfuKdFExSsJG8ktuzUXy4fR";
-  }
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  return `${supabaseUrl}/functions/v1/redash-proxy`;
+  return "https://us-central1-motoboy-13742.cloudfunctions.net/redashProxy";
 };
 
 interface PedidoRT {
