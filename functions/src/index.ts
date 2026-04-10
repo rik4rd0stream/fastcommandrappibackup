@@ -6,13 +6,15 @@ import * as admin from "firebase-admin";
 
 admin.initializeApp();
 
-// Set global options
-setGlobalOptions({ region: "us-central1", maxInstances: 10 });
+// Set global options, including a global CORS policy.
+// This is the definitive fix for the cross-origin errors.
+setGlobalOptions({ 
+    region: "us-central1", 
+    maxInstances: 10,
+    cors: true // Allow requests from any origin
+});
 
-// Define CORS options for all functions to allow requests from any origin
-const corsOptions = { cors: true };
-
-export const createUser = onCall(corsOptions, async (request) => {
+export const createUser = onCall(async (request) => {
     if (!request.auth) {
         throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
     }
@@ -60,7 +62,7 @@ export const createUser = onCall(corsOptions, async (request) => {
     }
 });
 
-export const updateUser = onCall(corsOptions, async (request) => {
+export const updateUser = onCall(async (request) => {
     if (!request.auth) {
         throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
     }
@@ -98,7 +100,7 @@ export const updateUser = onCall(corsOptions, async (request) => {
     }
 });
 
-export const enviarNotificacaoHighPriority = onCall(corsOptions, async (request) => {
+export const enviarNotificacaoHighPriority = onCall(async (request) => {
     const { tokenDestino, titulo, mensagem } = request.data;
     
     const payload = {
