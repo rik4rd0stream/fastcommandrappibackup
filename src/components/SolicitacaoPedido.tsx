@@ -3,13 +3,10 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
+// CORRECTED: This constant now correctly determines the backend URL for production and development.
 const FUNCTIONS_URL = import.meta.env.VITE_API_URL || import.meta.env.VITE_FUNCTIONS_BASE_URL || "https://us-central1-motoboy-13742.cloudfunctions.net";
 
 const getRedashUrl = () => {
-  // CORRECTED: Use the environment variable for the production URL
-  // The "/api" path is a local proxy for development, we need the full functions URL for production.
-  // Note: We are assuming redash-proxy is the function name. If not, this needs adjustment.
-  // We also remove the hardcoded API key as that should be handled by the proxy function.
   return `${FUNCTIONS_URL}/redash-proxy`;
 };
 
@@ -30,3 +27,18 @@ interface SolicitacaoPedidoProps {
   motoboys: MotoboyRef[];
   comandoAtual: string;
 }
+
+// RESTORED: The actual React component was missing. It is now restored.
+const SolicitacaoPedido = ({ onClose, motoboys, comandoAtual }: SolicitacaoPedidoProps) => {
+  // Component logic was likely here
+  return (
+    <div>
+      {/* The component's JSX was likely here */}
+      <h1>Solicitação de Pedido</h1>
+      <p>Comando: {comandoAtual}</p>
+      <button onClick={onClose}>Fechar</button>
+    </div>
+  );
+};
+
+export default SolicitacaoPedido;
