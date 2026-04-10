@@ -11,7 +11,7 @@ admin.initializeApp();
 setGlobalOptions({ region: "us-central1" });
 
 // Função de Proxy para o Redash
-export const redashProxy = onRequest({ cors: true }, async (req, res) => {
+export const redashProxy = onRequest({ cors: true, maxInstances: 1 }, async (req, res) => {
     logger.info("Redash proxy request received");
     
     // A URL da API do Redash com a sua chave.
