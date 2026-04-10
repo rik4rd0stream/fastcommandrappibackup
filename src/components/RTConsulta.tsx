@@ -80,11 +80,14 @@ const RTConsulta = ({ onClose, motoboys, onSelectPedido }: RTConsultaProps) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [motoboys]); // FIX: Adicionado 'motoboys' ao array de dependências.
 
   useEffect(() => {
-    buscar();
-  }, [buscar]);
+    // A busca só é acionada se a lista de motoboys não estiver vazia.
+    if (motoboys.length > 0) {
+      buscar();
+    }
+  }, [buscar, motoboys]);
 
   return (
     <div className="fixed inset-0 bg-background/95 z-50 p-4 overflow-y-auto">
@@ -125,11 +128,11 @@ const RTConsulta = ({ onClose, motoboys, onSelectPedido }: RTConsultaProps) => {
           <p className="text-muted-foreground text-[11px] animate-pulse text-center py-8">
             Buscando RTs...
           </p>
-        ) : rts.length === 0 ? (
+        ) : rts.length === 0 && !erro ? (
           <p className="text-muted-foreground text-[11px] text-center py-8 bg-card rounded-xl border border-border">
             Nenhum RT com pedidos no momento
           </p>
-        ) : (
+        ) : rts.length > 0 && !erro ? (
           <div className="space-y-3 pb-8">
             <p className="text-[10px] text-muted-foreground font-mono text-center">
               {rts.length} RT(s) ativos
@@ -197,7 +200,7 @@ const RTConsulta = ({ onClose, motoboys, onSelectPedido }: RTConsultaProps) => {
               );
             })}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
