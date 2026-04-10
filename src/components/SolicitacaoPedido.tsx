@@ -1,13 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import { doc, getDoc } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const getRedashUrl = () => {
-  if (import.meta.env.DEV) {
-    return "/api/redash/api/queries/130603/results.json?api_key=VqwlaUY9wOLjhUJTvrfuKdFExSsJG8ktuzUXy4fR";
-  }
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  return `${supabaseUrl}/functions/v1/redash-proxy`;
+  // TODO: Replace with a production-ready solution for the Redash proxy
+  return "/api/redash/api/queries/130603/results.json?api_key=VqwlaUY9wOLjhUJTvrfuKdFExSsJG8ktuzUXy4fR";
 };
 
 interface Pedido {
@@ -72,38 +70,45 @@ const SolicitacaoPedido = ({ onClose, motoboys, comandoAtual }: SolicitacaoPedid
     setEnviando(true);
 
     try {
-      // Fetch Líder's FCM token from Firestore
-      const liderDoc = await getDoc(doc(db, "usuarios", "lider"));
-      if (!liderDoc.exists() || !liderDoc.data()?.fcmToken) {
-        alert("❌ O Líder ainda não registrou o dispositivo dele. Peça para ele abrir o app primeiro.");
+      const q = query(collection(db, "usuarios"), where("recebeNotificacao", "==", true));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        alert("❌ Nenhum usuário habilitado para receber notificações foi encontrado.");
         setEnviando(false);
         return;
       }
 
-      const targetToken = liderDoc.data().fcmToken;
-      const msg = `${comandoAtual} ${pedidoSelecionado.order_id} ${motoboy.id_motoboy}`;
-      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
-
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const res = await fetch(`${supabaseUrl}/functions/v1/send-push-notification`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: "⚠️ Solicitação de Envio",
-          body: `Ricardo preparou uma nova rota. Clique em Aceitar para enviar ao robô.`,
-          whatsappUrl,
-          targetToken,
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Erro ao enviar");
+      const tokens = querySnapshot.docs.map(doc => doc.data().fcmToken).filter(token => token);
+      
+      if (tokens.length === 0) {
+        alert("❌ Usuários foram encontrados, mas nenhum deles possui um token de notificação válido.");
+        setEnviando(false);
+        return;
       }
 
-      alert(`✅ Solicitação enviada ao Líder!\nPedido #${pedidoSelecionado.order_id}\nMotoboy: ${motoboy.nome}`);
+      const msg = `${comandoAtual} ${pedidoSelecionado.order_id} ${motoboy.id_motoboy}`;
+      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+      
+      const functions = getFunctions();
+      const enviarPush = httpsCallable(functions, 'enviarNotificacaoHighPriority');
+
+      const promises = tokens.map(tokenDestino => 
+        enviarPush({
+          tokenDestino: tokenDestino,
+          titulo: "⚠️ Solicitação de Envio",
+          mensagem: `Ricardo preparou uma nova rota. Clique em Aceitar para enviar ao robô.`,
+          whatsappUrl: whatsappUrl,
+        })
+      );
+
+      await Promise.all(promises);
+
+      alert(`✅ Solicitação enviada para ${tokens.length} usuário(s)!\nPedido #${pedidoSelecionado.order_id}\nMotoboy: ${motoboy.nome}`);
+
       setPedidoSelecionado(null);
     } catch (e: any) {
+      console.error("Erro ao enviar notificação:", e);
       alert(`❌ Erro: ${e.message || "Verifique a conexão."}`);
     } finally {
       setEnviando(false);

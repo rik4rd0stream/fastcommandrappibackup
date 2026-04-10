@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, orderBy, query, getDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase"; // Importando seu Firebase
+import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { requestNotificationPermission, onForegroundMessage } from "@/lib/fcm";
+import { useToast } from "@/components/ui/use-toast";
 import PedidosList from "@/components/PedidosList";
 import RTConsulta from "@/components/RTConsulta";
 import SolicitacaoPedido from "@/components/SolicitacaoPedido";
 import LoginScreen from "@/components/LoginScreen";
-import SignupScreen from "@/components/SignupScreen";
+import GerenciadorUsuarios from "@/components/GerenciadorUsuarios";
 
 interface Motoboy {
   id: string;
@@ -33,16 +34,16 @@ const Index = () => {
   const [pedidosEnviados, setPedidosEnviados] = useState<Set<string>>(new Set());
   const [showRTConsulta, setShowRTConsulta] = useState(false);
   const [showSolicitacao, setShowSolicitacao] = useState(false);
-  const [showSignup, setShowSignup] = useState(false);
+  const [showUserManagement, setShowUserManagement] = useState(false);
+  const { toast } = useToast();
 
-  // --- LÓGICA DE AUTH FIREBASE ---
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
 
       if (currentUser) {
         try {
-          // Busca o perfil que você criou (Ricardo/Programador) no Firestore
+          // Busca os dados iniciais do perfil
           const docRef = doc(db, "profiles", currentUser.uid);
           const docSnap = await getDoc(docRef);
 
@@ -51,11 +52,10 @@ const Index = () => {
             setPerfil(data.perfil);
             setNomeUsuario(data.nome);
           } else {
-            console.warn("Perfil não encontrado no Firestore para este UID.");
-            setPerfil("usuario"); // Padrão se não achar
+            setPerfil("usuario");
           }
         } catch (e) {
-          console.error("Erro ao buscar perfil no Firestore:", e);
+          console.error("Erro ao buscar perfil:", e);
         }
       } else {
         setPerfil(null);
@@ -67,30 +67,45 @@ const Index = () => {
     return () => unsubscribeAuth();
   }, []);
 
-  // Register FCM token only for líder (Mantido do seu código original)
   useEffect(() => {
-    if (!user || perfil !== "lider") return;
+    if (!user) return;
 
     const registerFCM = async () => {
       try {
-        const token = await requestNotificationPermission("SUA_VAPID_KEY_AQUI"); 
+        const token = await requestNotificationPermission("BlqUjXu7NogekLsoD9Cp6FWKN4JfEnrBnNybso_ntheRV2uT9FQhM-AEoYwcJXeBN-iLP7KVO9q72QOOfwLcMi4");
+        
         if (token) {
-          await setDoc(doc(db, "usuarios", user.uid), {
-            perfil,
+          // AJUSTE: Salvando o token diretamente no documento de perfil do usuário
+          const profileDocRef = doc(db, "profiles", user.uid);
+          
+          const tokenData = {
             fcmToken: token,
             deviceInfo: navigator.userAgent,
             updatedAt: new Date().toISOString(),
-          }, { merge: true });
+          };
+
+          // O merge: true é vital para NÃO apagar o 'nome' e 'perfil' existentes
+          await setDoc(profileDocRef, tokenData, { merge: true });
+          console.log("FCM registrado com sucesso no perfil!");
         }
       } catch (e) {
-        console.error("FCM registration error:", e);
+        console.error("Erro no registro FCM:", e);
       }
     };
 
     registerFCM();
-  }, [user, perfil]);
+  }, [user]);
 
-  // Lista Motoboys do Firestore
+  useEffect(() => {
+    const unsubscribe = onForegroundMessage((payload) => {
+      toast({
+        title: payload.notification?.title || "Nova Notificação",
+        description: payload.notification?.body || "",
+      });
+    });
+    return () => unsubscribe();
+  }, [toast]);
+
   useEffect(() => {
     const q = query(collection(db, "entregadores"), orderBy("nome", "asc"));
     const unsub = onSnapshot(q, (snapshot) => {
@@ -121,30 +136,34 @@ const Index = () => {
 
   const perfilLabel = perfil === "programador" ? "Programador" : perfil === "lider" ? "Líder" : "Usuário";
   const canSeeSolicitacao = perfil === "programador";
-  const canSeeSignup = perfil === "programador";
+  const canManageUsers = perfil === "programador";
 
-  // --- Funções de Salvar/Deletar/Enviar (Mantidas as suas) ---
   const toggleCadastro = () => { setShowCadastro((v) => !v); if (showCadastro) resetForm(); };
   const resetForm = () => { setEditId(null); setNome(""); setIdMotoboy(""); };
+  
   const selecionarMotoboy = (id: string) => {
     const m = motoboys.find((mb) => mb.id === id);
     if (m) { setEditId(m.id); setNome(m.nome); setIdMotoboy(m.id_motoboy); } else { resetForm(); }
   };
+
   const salvar = async () => {
     if (!nome || !idMotoboy) return alert("Preencha tudo!");
     if (editId) { await updateDoc(doc(db, "entregadores", editId), { nome, id_motoboy: idMotoboy }); }
     else { await addDoc(collection(db, "entregadores"), { nome, id_motoboy: idMotoboy }); }
     resetForm(); setShowCadastro(false);
   };
+
   const deletar = async () => {
     if (!editId || !confirm("Excluir entregador?")) return;
     await deleteDoc(doc(db, "entregadores", editId));
     resetForm(); setShowCadastro(false);
   };
+
   const colarPedido = async () => {
     const text = await navigator.clipboard.readText();
     setIdPedido(text.replace(/\D/g, ""));
   };
+
   const enviar = (nomeMotoboy: string, id: string) => {
     if (!idPedido) return alert("Falta o ID do pedido!");
     const msg = `${comandoAtual} ${idPedido} ${id}`;
@@ -166,8 +185,8 @@ const Index = () => {
             {canSeeSolicitacao && (
               <button onClick={() => setShowSolicitacao(true)} className="h-12 px-3 rounded-2xl bg-chart-4/10 border border-chart-4/30 text-[10px] font-bold uppercase">📩 Solicitar</button>
             )}
-            {canSeeSignup && (
-              <button onClick={() => setShowSignup(true)} className="h-12 px-3 rounded-2xl bg-secondary border border-border text-[10px] font-bold uppercase">👤+</button>
+            {canManageUsers && (
+              <button onClick={() => setShowUserManagement(true)} className="h-12 px-3 rounded-2xl bg-secondary border border-border text-[10px] font-bold uppercase">👤</button>
             )}
             <button onClick={() => setShowRTConsulta(true)} className="h-12 px-3 rounded-2xl bg-accent/10 border border-accent/30 text-[10px] font-bold uppercase">📋 RTs</button>
             <button onClick={toggleCadastro} className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/30 text-primary text-2xl font-bold">+</button>
@@ -222,13 +241,8 @@ const Index = () => {
       </div>
       {showRTConsulta && <RTConsulta onClose={() => setShowRTConsulta(false)} motoboys={motoboys} onSelectPedido={(id) => { setIdPedido(id); setShowRTConsulta(false); }} />}
       {showSolicitacao && <SolicitacaoPedido onClose={() => setShowSolicitacao(false)} motoboys={motoboys} comandoAtual={comandoAtual} />}
-      {showSignup && (
-        <div className="fixed inset-0 bg-background/95 z-50 overflow-y-auto">
-          <div className="absolute top-4 right-4">
-            <button onClick={() => setShowSignup(false)} className="w-10 h-10 rounded-2xl bg-destructive/10 border border-destructive/30 text-destructive font-bold">✕</button>
-          </div>
-          <SignupScreen onSignup={() => setShowSignup(false)} onGoToLogin={() => setShowSignup(false)} />
-        </div>
+      {showUserManagement && (
+        <GerenciadorUsuarios onClose={() => setShowUserManagement(false)} />
       )}
     </div>
   );
