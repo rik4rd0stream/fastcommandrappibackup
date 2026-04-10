@@ -1,11 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
 
+// CORRECTED: This function now correctly determines the backend URL.
 const getRedashUrl = () => {
+  // For local development, the old proxy URL is kept to ensure local functionality remains unchanged.
   if (import.meta.env.DEV) {
     return "/api/redash/api/queries/130603/results.json?api_key=VqwlaUY9wOLjhUJTvrfuKdFExSsJG8ktuzUXy4fR";
   }
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  return `${supabaseUrl}/functions/v1/redash-proxy`;
+  
+  // For production (Vercel), it now uses the correct Firebase Function environment variables.
+  const functionsBaseUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_FUNCTIONS_BASE_URL || "https://us-central1-motoboy-13742.cloudfunctions.net";
+  return `${functionsBaseUrl}/redash-proxy`;
 };
 
 interface Pedido {
