@@ -7,9 +7,8 @@ const getRedashUrl = () => {
     return "/api/redash/api/queries/130603/results.json?api_key=VqwlaUY9wOLjhUJTvrfuKdFExSsJG8ktuzUXy4fR";
   }
   
-  // For production (Vercel), it now uses the correct Firebase Function environment variables.
-  const functionsBaseUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_FUNCTIONS_BASE_URL || "https://us-central1-motoboy-13742.cloudfunctions.net";
-  return `${functionsBaseUrl}/redashProxy`;
+  // For production, it now uses the correct Firebase Gen 2 Function URL.
+  return "https://redashproxy-aiwvhm6k3a-uc.a.run.app";
 };
 
 interface Pedido {
