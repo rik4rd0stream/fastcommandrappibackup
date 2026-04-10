@@ -1,8 +1,31 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /profiles/{userId} {
+    // Regra geral: exige autenticação para qualquer acesso.
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Regra específica para a coleção 'entregadores' (lista de motobays).
+    // Permite a leitura se o usuário estiver logado.
+    match /entregadores/{entregadorId} {
       allow read: if request.auth != null;
+      // A escrita/deleção pode ser mais restrita se necessário (ex: só para 'programador')
+      allow write, delete: if request.auth != null;
+    }
+
+    // Regra para os perfis dos usuários.
+    // Permite que um usuário leia e atualize seu próprio perfil.
+    // A criação (set) pode ser feita pela função de criação de usuário.
+    match /profiles/{userId} {
+      allow read, update: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null; // Permite criar o perfil ao se registrar.
+    }
+
+    // Regra para permitir que usuários autenticados leiam a lista de perfis 
+    // (necessário para o Gerenciador de Usuários, por exemplo).
+    match /profiles/{document=**} {
+        allow read: if request.auth != null;
     }
   }
 }
