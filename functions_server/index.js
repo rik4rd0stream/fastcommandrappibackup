@@ -13,16 +13,11 @@ setGlobalOptions({
     maxInstances: 10,
 });
 
-// FIXED: The missing redash-proxy function is now created.
-// This function acts as a secure backend proxy to fetch data from the Redash API.
+// FINAL-FIX: This proxy function is the definitive solution.
 exports.redashProxy = onRequest((request, response) => {
-    // Use the cors middleware to handle CORS headers automatically.
-    // This allows the Vercel frontend to call this function.
     cors(request, response, async () => {
         logger.info("Redash Proxy function triggered.");
 
-        // The target Redash URL with the sensitive API key.
-        // This key is now secure on the backend and not exposed to the client.
         const redashApiUrl = "https://redash.rappi.com/api/queries/130603/results.json?api_key=VqwlaUY9wOLjhUJTvrfuKdFExSsJG8ktuzUXy4fR";
 
         try {
