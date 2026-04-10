@@ -6,17 +6,19 @@ import * as admin from "firebase-admin";
 
 admin.initializeApp();
 
-setGlobalOptions({ region: "us-central1", maxInstances: 10, cors: true });
+// Definindo a região globalmente
+setGlobalOptions({ region: "us-central1" });
 
-export const solicitarAtendimento = onCall(async (request) => {
+// Função para solicitar atendimento, agora com CORS definido corretamente
+export const solicitarAtendimento = onCall({ cors: true }, async (request) => {
     if (!request.auth) {
         throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
     }
     const solicitanteUid = request.auth.uid;
     const solicitanteNome = request.auth.token.name || 'Usuário';
 
-    // VERIFICAÇÃO DE PERMISSÃO
-    const solicitanteProfileDoc = await admin.firestore().collection('profiles').doc(solicitanteUid).get();
+    const db = admin.firestore();
+    const solicitanteProfileDoc = await db.collection('profiles').doc(solicitanteUid).get();
     const solicitanteProfile = solicitanteProfileDoc.data();
 
     if (solicitanteProfile?.perfil !== 'programador' && solicitanteProfile?.podeSolicitar !== true) {
@@ -30,7 +32,6 @@ export const solicitarAtendimento = onCall(async (request) => {
 
     logger.info(`Iniciando solicitação por ${solicitanteNome}`, { data: request.data });
 
-    const db = admin.firestore();
     const lideresSnapshot = await db.collection('profiles')
                                     .where('perfil', '==', 'lider')
                                     .where('recebeNotificacao', '==', true)
@@ -46,18 +47,20 @@ export const solicitarAtendimento = onCall(async (request) => {
         throw new HttpsError('not-found', 'Nenhum líder possui dispositivo registrado para notificações.');
     }
     
-    const messagePayload = {
+    // CORREÇÃO: Usando `sendEachForMulticast` que é o método correto e mais robusto
+    const message = {
         notification: {
             title: 'Nova Solicitação de Despacho',
             body: `${solicitanteNome} solicitou o pedido #${pedidoId} para ${motoboyNome}.`,
         },
         data: { whatsappUrl: whatsappUrl, action: 'confirmar_solicitacao' },
         webpush: { notification: { icon: 'https://fastcommand.vercel.app/icon-192x192.png', actions: [{ action: 'abrir_whatsapp', title: 'Aceitar e Abrir' }] } },
-        android: { priority: "high", notification: { sound: "default", priority: "max" } },
+        android: { priority: "high" as const, notification: { sound: "default", priority: "max" as const } }, // Corrigido com "as const"
     };
 
     try {
-        const response = await admin.messaging().sendToDevice(tokens, messagePayload);
+        // CORREÇÃO: Substituído `sendToDevice` por `sendEachForMulticast`
+        const response = await admin.messaging().sendEachForMulticast({ tokens, ...message });
         logger.info('Notificações enviadas:', { successCount: response.successCount, failureCount: response.failureCount });
         return { success: true, message: `Notificação enviada para ${response.successCount} líder(es).` };
     } catch (error) {
@@ -66,19 +69,20 @@ export const solicitarAtendimento = onCall(async (request) => {
     }
 });
 
-export const createUser = onCall(async (request) => {
-    if (!request.auth) {
+// Função para criar usuário, com CORS e código limpo
+export const createUser = onCall({ cors: true }, async (request) => {
+    if (!request.auth || !request.auth.uid) {
         throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
     }
     const callerUid = request.auth.uid;
     
     try {
-        const callerProfileDoc = await admin.firestore().collection('profiles').doc(callerUid).get();
+        const db = admin.firestore();
+        const callerProfileDoc = await db.collection('profiles').doc(callerUid).get();
         if (callerProfileDoc.data()?.perfil !== 'programador') {
             throw new HttpsError('permission-denied', 'Apenas programadores podem criar usuários.');
         }
 
-        // Adicionando 'podeSolicitar' na desestruturação
         const { email, password, nome, perfil, recebeNotificacao, podeSolicitar } = request.data;
         if (!email || !password || !nome || !perfil) {
             throw new HttpsError('invalid-argument', 'Dados incompletos para criação.');
@@ -92,21 +96,12 @@ export const createUser = onCall(async (request) => {
             perfil,
             email,
             recebeNotificacao: !!recebeNotificacao,
-            podeSolicitar: !!podeSolicitar, // Salvando o novo campo
+            podeSolicitar: !!podeSolicitar,
             user_id: userRecord.uid,
             createdAt: new Date().toISOString()
         };
 
-        const db = admin.firestore();
-        const profileRef = db.collection("profiles").doc(userRecord.uid);
-        // O antigo 'usuarios' pode ser removido se não for mais usado em outras partes
-        const userRef = db.collection("usuarios").doc(userRecord.uid);
-        
-        const batch = db.batch();
-        batch.set(profileRef, profileData);
-        batch.set(userRef, { nome, perfil, recebeNotificacao: !!recebeNotificacao, podeSolicitar: !!podeSolicitar }, { merge: true });
-
-        await batch.commit();
+        await db.collection("profiles").doc(userRecord.uid).set(profileData);
 
         return { success: true, message: `Usuário '${nome}' criado com sucesso.` };
 
@@ -117,36 +112,35 @@ export const createUser = onCall(async (request) => {
     }
 });
 
-export const updateUser = onCall(async (request) => {
-    if (!request.auth) {
+// Função para atualizar usuário, com CORS e código limpo
+export const updateUser = onCall({ cors: true }, async (request) => {
+    if (!request.auth || !request.auth.uid) {
         throw new HttpsError('unauthenticated', 'A função deve ser chamada por um usuário autenticado.');
     }
     const callerUid = request.auth.uid;
 
     try {
-        const callerProfileDoc = await admin.firestore().collection('profiles').doc(callerUid).get();
+        const db = admin.firestore();
+        const callerProfileDoc = await db.collection('profiles').doc(callerUid).get();
         if (callerProfileDoc.data()?.perfil !== 'programador') {
             throw new HttpsError('permission-denied', 'Apenas programadores podem editar usuários.');
         }
 
-        // Adicionando 'podeSolicitar' na desestruturação
+        logger.info("Iniciando processo de atualização de usuário."); // LOG ADICIONADO PARA FORÇAR DEPLOY
+
         const { uid, nome, perfil, recebeNotificacao, podeSolicitar } = request.data;
         if (!uid || !nome || !perfil) {
             throw new HttpsError('invalid-argument', 'Dados incompletos para atualização.');
         }
 
-        const updatedData = { nome, perfil, recebeNotificacao: !!recebeNotificacao, podeSolicitar: !!podeSolicitar }; // Salvando o novo campo
+        const updatedData = { 
+            nome, 
+            perfil, 
+            recebeNotificacao: !!recebeNotificacao, 
+            podeSolicitar: !!podeSolicitar 
+        };
 
-        const db = admin.firestore();
-        const profileRef = db.collection("profiles").doc(uid);
-        // O antigo 'usuarios' pode ser removido se não for mais usado
-        const userRef = db.collection("usuarios").doc(uid);
-
-        const batch = db.batch();
-        batch.update(profileRef, updatedData);
-        batch.set(userRef, updatedData, { merge: true });
-
-        await batch.commit();
+        await db.collection("profiles").doc(uid).update(updatedData);
 
         return { success: true, message: `Usuário '${nome}' atualizado com sucesso.` };
 
@@ -154,18 +148,5 @@ export const updateUser = onCall(async (request) => {
         logger.error("Falha Crítica ao Atualizar Usuário:", { details: error.message, fullError: error });
         if (error instanceof HttpsError) throw error;
         throw new HttpsError('internal', error.message || 'Ocorreu um erro no servidor.');
-    }
-});
-
-export const enviarNotificacaoHighPriority = onCall(async (request) => {
-    const { tokenDestino, titulo, mensagem } = request.data;
-    const payload = { token: tokenDestino, notification: { title, body: mensagem }, android: { priority: "high", notification: { sound: "default", notificationPriority: "PRIORITY_MAX" } }, webpush: { headers: { Urgency: "high" }, notification: { requireInteraction: true, icon: "/icon.png" } } };
-    try {
-        const response = await admin.messaging().send(payload);
-        logger.info("Notificação enviada:", response);
-        return { success: true, response };
-    } catch(error: any) {
-        logger.error("Erro ao enviar notificação:", error);
-        throw new HttpsError('internal', error.message || 'Falha ao enviar a notificação.');
     }
 });
