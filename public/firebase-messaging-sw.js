@@ -2,7 +2,7 @@
 importScripts("https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js");
 
-// Inicialização do Firebase
+// Configuração do Firebase
 firebase.initializeApp({
   apiKey: "AIzaSyB8ojoSzZRfgw6PRPTZ-fF3NfZRCJArt5M",
   authDomain: "motoboy-13742.firebaseapp.com",
@@ -14,65 +14,67 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// --- MELHORIA DE ESTABILIDADE PWA ---
-// Força o Service Worker a se ativar assim que for instalado, 
-// sem esperar que o usuário feche todas as abas.
-self.addEventListener("install", (event) => {
-  self.skipWaiting();
-});
+// Força a ativação e controle imediato do Service Worker
+self.addEventListener("install", (event) => { self.skipWaiting(); });
+self.addEventListener("activate", (event) => { event.waitUntil(clients.claim()); });
 
-// Garante que o Service Worker tome controle da página imediatamente após a ativação.
-self.addEventListener("activate", (event) => {
-  event.waitUntil(clients.claim());
-});
-
-// Captura erros para evitar que o SW "congele" a aplicação
-self.addEventListener('error', (event) => {
-  console.error('[SW Error]:', event.message);
-});
-
-self.addEventListener('unhandledrejection', (event) => {
-  console.error('[SW Unhandled Rejection]:', event.reason);
-});
-// ------------------------------------
-
-// Lógica de mensagens em segundo plano
+// --- NOVO: Manipulador de mensagens em segundo plano ---
+// Este handler é mais inteligente: ele usa o título, corpo e ações enviados pelo backend.
 messaging.onBackgroundMessage((payload) => {
-  console.log("[firebase-messaging-sw.js] Background message:", payload);
+  console.log("[SW] Mensagem em background recebida:", payload);
 
+  const notification = payload.notification || {};
   const data = payload.data || {};
-  const title = data.title || payload.notification?.title || "Nova Solicitação";
-  const body = data.body || payload.notification?.body || "";
-  const whatsappUrl = data.whatsappUrl || "";
-
+  
+  const title = notification.title || 'Nova Notificação';
   const options = {
-    body,
-    icon: "/icon-192.png",
-    badge: "/icon-192.png",
+    body: notification.body || '',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
     vibrate: [200, 100, 200],
     requireInteraction: true,
-    data: { whatsappUrl },
-    actions: [
-      {
-        action: "aceitar",
-        title: "✅ Aceitar",
-      },
-    ],
+    // Passa TODOS os dados (action, whatsappUrl) para a notificação.
+    data: data, 
+    // Usa as ações customizadas enviadas pelo backend (ex: 'Aceitar e Abrir')
+    actions: payload.webpush?.notification?.actions || [{ action: 'open', title: 'Abrir App' }]
   };
 
   self.registration.showNotification(title, options);
 });
 
-// Lógica de clique na notificação
+
+// --- NOVO: Manipulador de clique na notificação ---
 self.addEventListener("notificationclick", (event) => {
-  console.log("[firebase-messaging-sw.js] Notification click:", event.action);
+  console.log("[SW] Clique na notificação:", event);
   event.notification.close();
 
-  const whatsappUrl = event.notification.data?.whatsappUrl;
+  const data = event.notification.data || {};
+  const notificationAction = data.action; // ex: 'confirmar_solicitacao'
+  const whatsappUrl = data.whatsappUrl;
 
-  if (event.action === "aceitar" && whatsappUrl) {
-    event.waitUntil(clients.openWindow(whatsappUrl));
+  // Se a notificação for uma solicitação, abra o app para confirmação.
+  if (notificationAction === 'confirmar_solicitacao' && whatsappUrl) {
+    
+    // Constrói a URL da aplicação com os parâmetros para confirmação.
+    const appUrl = new URL('/', self.location.origin);
+    appUrl.searchParams.set('action', 'confirmar_solicitacao');
+    appUrl.searchParams.set('whatsapp_url', encodeURIComponent(whatsappUrl));
+
+    // Procura por uma aba aberta do app e a foca/navega.
+    event.waitUntil(
+      clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+        if (clientList.length > 0) {
+          const client = clientList[0];
+          client.navigate(appUrl.href);
+          return client.focus();
+        }
+        // Se não houver abas abertas, abre uma nova.
+        return clients.openWindow(appUrl.href);
+      })
+    );
   } else if (whatsappUrl) {
+    // Comportamento antigo como fallback.
+    console.log("[SW] Ação não é de confirmação, abrindo WhatsApp diretamente.");
     event.waitUntil(clients.openWindow(whatsappUrl));
   }
 });

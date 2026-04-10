@@ -10,6 +10,7 @@ interface UserProfile {
   email: string;
   perfil: "usuario" | "lider" | "programador";
   recebeNotificacao: boolean;
+  podeSolicitar?: boolean; // Novo campo opcional
 }
 
 interface GerenciadorUsuariosProps {
@@ -29,6 +30,7 @@ const GerenciadorUsuarios = ({ onClose }: GerenciadorUsuariosProps) => {
   const [senha, setSenha] = useState("");
   const [perfil, setPerfil] = useState<"usuario" | "lider" | "programador">("usuario");
   const [recebeNotificacao, setRecebeNotificacao] = useState(true);
+  const [podeSolicitar, setPodeSolicitar] = useState(false); // Novo estado
   
   const [loadingAction, setLoadingAction] = useState(false);
   const [erro, setErro] = useState("");
@@ -54,6 +56,7 @@ const GerenciadorUsuarios = ({ onClose }: GerenciadorUsuariosProps) => {
     setSenha("");
     setPerfil("usuario");
     setRecebeNotificacao(true);
+    setPodeSolicitar(false); // Reseta o novo estado
     setErro("");
     setLoadingAction(false);
   }, []);
@@ -71,7 +74,8 @@ const GerenciadorUsuarios = ({ onClose }: GerenciadorUsuariosProps) => {
         setEmail(user.email);
         setPerfil(user.perfil);
         setRecebeNotificacao(user.recebeNotificacao);
-        setSenha(""); // Limpa o campo de senha na edição
+        setPodeSolicitar(!!user.podeSolicitar); // Atualiza o novo estado
+        setSenha(""); 
         setErro("");
       }
     }
@@ -89,15 +93,15 @@ const GerenciadorUsuarios = ({ onClose }: GerenciadorUsuariosProps) => {
     setErro("");
 
     try {
-      const functions = getFunctions(undefined, 'us-central1'); // CORREÇÃO: Especificando a região
+      const functions = getFunctions(undefined, 'us-central1');
       let result: any;
 
       if (isNewUser) {
         const createUser = httpsCallable(functions, 'createUser');
-        result = await createUser({ nome, email, password: senha, perfil, recebeNotificacao });
+        result = await createUser({ nome, email, password: senha, perfil, recebeNotificacao, podeSolicitar }); // Envia o novo campo
       } else {
         const updateUser = httpsCallable(functions, 'updateUser');
-        result = await updateUser({ uid: selectedUserId, nome, perfil, recebeNotificacao });
+        result = await updateUser({ uid: selectedUserId, nome, perfil, recebeNotificacao, podeSolicitar }); // Envia o novo campo
       }
 
       toast({
@@ -173,6 +177,7 @@ const GerenciadorUsuarios = ({ onClose }: GerenciadorUsuariosProps) => {
                 ))}
             </div>
 
+            {/* Checkbox para Notificações */}
             <div 
                 onClick={() => setRecebeNotificacao(!recebeNotificacao)}
                 className="flex items-center justify-center gap-3 p-4 rounded-2xl bg-secondary border border-border cursor-pointer transition-all"
@@ -181,6 +186,17 @@ const GerenciadorUsuarios = ({ onClose }: GerenciadorUsuariosProps) => {
                     {recebeNotificacao && <span className="text-primary-foreground text-xs">✓</span>}
                 </div>
                 <span className="text-sm font-bold text-muted-foreground">Receber Notificações</span>
+            </div>
+
+            {/* NOVO Checkbox para Solicitações */}
+            <div 
+                onClick={() => setPodeSolicitar(!podeSolicitar)}
+                className="flex items-center justify-center gap-3 p-4 rounded-2xl bg-secondary border border-border cursor-pointer transition-all"
+            >
+                <div className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${podeSolicitar ? 'bg-chart-4' : 'bg-background'}`}>
+                    {podeSolicitar && <span className="text-primary-foreground text-xs">✓</span>}
+                </div>
+                <span className="text-sm font-bold text-muted-foreground">Pode Fazer Solicitações</span>
             </div>
 
             {erro && <p className="text-destructive text-xs text-center bg-destructive/10 p-2 rounded-xl border border-destructive/20">{erro}</p>}
