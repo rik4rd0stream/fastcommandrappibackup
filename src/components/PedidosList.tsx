@@ -9,7 +9,7 @@ const getRedashUrl = () => {
   
   // For production (Vercel), it now uses the correct Firebase Function environment variables.
   const functionsBaseUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_FUNCTIONS_BASE_URL || "https://us-central1-motoboy-13742.cloudfunctions.net";
-  return `${functionsBaseUrl}/redash-proxy`;
+  return `${functionsBaseUrl}/redashProxy`;
 };
 
 interface Pedido {

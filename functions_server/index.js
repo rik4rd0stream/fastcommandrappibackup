@@ -1,15 +1,54 @@
 const {setGlobalOptions} = require("firebase-functions/v2");
+const {onRequest} = require("firebase-functions/v2/https");
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
+const axios = require("axios");
+const cors = require("cors")({origin: true});
 
 admin.initializeApp();
 
 setGlobalOptions({ 
     region: "us-central1", 
     maxInstances: 10,
-    cors: true // Global CORS setting to fix the issue
 });
+
+// FIXED: The missing redash-proxy function is now created.
+// This function acts as a secure backend proxy to fetch data from the Redash API.
+exports.redashProxy = onRequest((request, response) => {
+    // Use the cors middleware to handle CORS headers automatically.
+    // This allows the Vercel frontend to call this function.
+    cors(request, response, async () => {
+        logger.info("Redash Proxy function triggered.");
+
+        // The target Redash URL with the sensitive API key.
+        // This key is now secure on the backend and not exposed to the client.
+        const redashApiUrl = "https://redash.rappi.com/api/queries/130603/results.json?api_key=VqwlaUY9wOLjhUJTvrfuKdFExSsJG8ktuzUXy4fR";
+
+        try {
+            const redashResponse = await axios.get(redashApiUrl);
+
+            if (redashResponse.status !== 200) {
+                logger.error("Redash API returned a non-200 status.", { status: redashResponse.status });
+                throw new Error("Failed to fetch data from Redash.");
+            }
+            
+            logger.info("Successfully fetched data from Redash.");
+            response.status(200).send(redashResponse.data);
+
+        } catch (error) {
+            logger.error("Critical failure in Redash Proxy function.", {
+                errorMessage: error.message,
+                axiosError: error.response ? error.response.data : "No response from axios",
+            });
+            response.status(500).send({
+                error: "Internal Server Error",
+                message: "The server encountered an error while trying to proxy the request to Redash.",
+            });
+        }
+    });
+});
+
 
 exports.createUser = onCall(async (request) => {
     if (!request.auth) {
@@ -19,7 +58,6 @@ exports.createUser = onCall(async (request) => {
     
     try {
         const callerProfileDoc = await admin.firestore().collection('profiles').doc(callerUid).get();
-        // CORRECTED: .exists is a property, not a function.
         if (!callerProfileDoc.exists || callerProfileDoc.data()?.perfil !== 'programador') {
             throw new HttpsError('permission-denied', 'Permissão negada. Apenas programadores podem criar usuários.');
         }
@@ -68,7 +106,6 @@ exports.updateUser = onCall(async (request) => {
 
     try {
         const callerProfileDoc = await admin.firestore().collection('profiles').doc(callerUid).get();
-        // CORRECTED: .exists is a property, not a function.
         if (!callerProfileDoc.exists || callerProfileDoc.data()?.perfil !== 'programador') {
             throw new HttpsError('permission-denied', 'Permissão negada. Apenas programadores podem editar usuários.');
         }
