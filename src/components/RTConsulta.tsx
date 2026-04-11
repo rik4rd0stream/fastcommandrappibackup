@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
+import redashConfig from '../lib/redash-config.json';
 
-// A URL da função de proxy do Firebase agora está gravada diretamente no código.
-// Isso garante que a consulta funcione de forma consistente em todos os ambientes.
+// A URL da função de proxy do Firebase agora é lida a partir do arquivo de configuração.
 const getRedashUrl = () => {
-  return "https://redashproxy-aiwvhm6k3a-uc.a.run.app";
+  return redashConfig.redashUrl;
 };
 
 interface PedidoRT {
@@ -80,10 +80,9 @@ const RTConsulta = ({ onClose, motoboys, onSelectPedido }: RTConsultaProps) => {
     } finally {
       setLoading(false);
     }
-  }, [motoboys]); // FIX: Adicionado 'motoboys' ao array de dependências.
+  }, [motoboys]);
 
   useEffect(() => {
-    // A busca só é acionada se a lista de motoboys não estiver vazia.
     if (motoboys.length > 0) {
       buscar();
     }

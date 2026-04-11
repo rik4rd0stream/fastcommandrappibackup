@@ -1,14 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
+import redashConfig from '../lib/redash-config.json';
 
-// CORRECTED: This function now correctly determines the backend URL.
 const getRedashUrl = () => {
-  // For local development, the old proxy URL is kept to ensure local functionality remains unchanged.
-  if (import.meta.env.DEV) {
-    return "/api/redash/api/queries/130603/results.json?api_key=VqwlaUY9wOLjhUJTvrfuKdFExSsJG8ktuzUXy4fR";
-  }
-  
-  // For production, it now uses the correct Firebase Gen 2 Function URL.
-  return "https://redashproxy-aiwvhm6k3a-uc.a.run.app";
+  return redashConfig.redashUrl;
 };
 
 interface Pedido {
