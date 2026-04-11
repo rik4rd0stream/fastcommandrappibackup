@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import redashConfig from '../lib/redash-config.json';
 
-// A URL da função de proxy do Firebase agora é lida a partir do arquivo de configuração.
 const getRedashUrl = () => {
-  return redashConfig.redashUrl;
+  const queryPath = "/api/queries/49/results.json?api_key=w9C7c412e82f7636e755a5b565d70c849e7951d6";
+  if (import.meta.env.DEV) {
+    return `/api/redash${queryPath}`;
+  }
+  return `https://redashproxy-aiwvhm6k3a-uc.a.run.app${queryPath}`;
 };
 
 interface PedidoRT {

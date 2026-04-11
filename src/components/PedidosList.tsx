@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
-import redashConfig from '../lib/redash-config.json';
 
 const getRedashUrl = () => {
-  return redashConfig.redashUrl;
+  const queryPath = "/api/queries/130603/results.json?api_key=VqwlaUY9wOLjhUJTvrfuKdFExSsJG8ktuzUXy4fR";
+  if (import.meta.env.DEV) {
+    return `/api/redash${queryPath}`;
+  }
+  return `https://redashproxy-aiwvhm6k3a-uc.a.run.app${queryPath}`;
 };
 
 interface Pedido {
